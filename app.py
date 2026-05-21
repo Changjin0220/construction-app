@@ -186,7 +186,7 @@ with col_left:
             height=max(200, len(df) * 45),
             font=dict(size=10),
         )
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     else:
         st.info("공사 데이터가 없습니다.")
 
@@ -261,7 +261,7 @@ with col_right:
             with daily_btn_cols[i % 5]:
                 is_open  = st.session_state.get(daily_key, False)
                 btn_label = f"🔼 {row['name']}" if is_open else f"📥 {row['name']}"
-                if st.button(btn_label, key=f"dbtn_{cid}", width="stretch"):
+                if st.button(btn_label, key=f"dbtn_{cid}", use_container_width=True):
                     new_state = not is_open
                     # 다른 폼 모두 닫기
                     for _, r2 in df.iterrows():
@@ -305,9 +305,9 @@ with col_right:
 
                     ds_col, dc_col = st.columns(2)
                     with ds_col:
-                        d_submitted = st.form_submit_button("💾 저장", width="stretch")
+                        d_submitted = st.form_submit_button("💾 저장", use_container_width=True)
                     with dc_col:
-                        d_cancelled = st.form_submit_button("✖ 취소", width="stretch")
+                        d_cancelled = st.form_submit_button("✖ 취소", use_container_width=True)
 
                     if d_submitted:
                         if not d_by.strip():
@@ -341,7 +341,7 @@ with col_right:
             with btn_cols[i % 5]:
                 is_open   = st.session_state.get(edit_key, False)
                 btn_label = f"🔼 {row['name']}" if is_open else f"✏️ {row['name']}"
-                if st.button(btn_label, key=f"btn_{cid}", width="stretch"):
+                if st.button(btn_label, key=f"btn_{cid}", use_container_width=True):
                     new_state = not is_open
                     for _, r2 in df.iterrows():
                         st.session_state[f"edit_{r2['id']}"]        = False
@@ -401,12 +401,12 @@ with col_right:
                     # 저장 / 취소 / 삭제 3버튼 동일 너비
                     save_col, cancel_col, del_btn_col = st.columns(3)
                     with save_col:
-                        submitted = st.form_submit_button("💾 저장", width="stretch")
+                        submitted = st.form_submit_button("💾 저장", use_container_width=True)
                     with cancel_col:
-                        cancelled = st.form_submit_button("✖ 취소", width="stretch")
+                        cancelled = st.form_submit_button("✖ 취소", use_container_width=True)
                     with del_btn_col:
                         delete_clicked = st.form_submit_button(
-                            "🗑 삭제", width="stretch",
+                            "🗑 삭제", use_container_width=True,
                             type="primary"
                         )
 
@@ -459,12 +459,12 @@ with col_right:
                     """, unsafe_allow_html=True)
                     yes_col2, no_col2, _ = st.columns([2, 2, 8])
                     with yes_col2:
-                        if st.button("✅ 삭제", key=f"yes_del2_{cid}", width="stretch"):
+                        if st.button("✅ 삭제", key=f"yes_del2_{cid}", use_container_width=True):
                             delete_construction(int(cid))
                             st.session_state[confirm_key] = False
                             st.rerun()
                     with no_col2:
-                        if st.button("✖ 취소", key=f"no_del2_{cid}", width="stretch"):
+                        if st.button("✖ 취소", key=f"no_del2_{cid}", use_container_width=True):
                             st.session_state[confirm_key] = False
                             st.rerun()
 
@@ -474,40 +474,44 @@ with col_right:
 # ════════════════════════════════════════════════════════════
 with st.sidebar:
 
-    # ── 공사 추가 (항상 표시) ─────────────────────────────────
+    # ── 공사 추가 ─────────────────────────────────────────────
     st.markdown("## ➕ 공사 추가")
-    add_name       = st.text_input("공사명", key="add_name")
-    a1, a2         = st.columns(2)
-    with a1:
-        add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_tkm")
-        add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_pkm")
-    with a2:
-        add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1, key="add_tspot")
-        add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1, key="add_pspot")
-    add_manager    = st.text_input("담당자", key="add_mgr")
-    add_period     = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31", key="add_period")
 
-    if st.button("✅ 공사 추가", key="do_add", width="stretch"):
-        if not add_name.strip():
-            st.warning("공사명을 입력해주세요.")
-        elif not add_manager.strip():
-            st.warning("담당자를 입력해주세요.")
-        elif add_total_km <= 0:
-            st.warning("전체물량(km)을 입력해주세요.")
-        elif add_plan_km <= 0:
-            st.warning("올해계획(km)을 입력해주세요.")
-        else:
-            add_construction(
-                name=add_name.strip(),
-                total_km=float(add_total_km),
-                total_spot=int(add_total_spot),
-                plan_km=float(add_plan_km),
-                plan_spot=int(add_plan_spot),
-                manager=add_manager.strip(),
-                period=add_period.strip(),
-            )
-            st.success(f"'{add_name}' 공사가 추가되었습니다.")
-            st.rerun()
+    with st.form(key="add_construction_form", clear_on_submit=True):
+        add_name       = st.text_input("공사명")
+        a1, a2         = st.columns(2)
+        with a1:
+            add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f")
+            add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f")
+        with a2:
+            add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1)
+            add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1)
+        add_manager    = st.text_input("담당자")
+        add_period     = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31")
+
+        add_submitted = st.form_submit_button("✅ 공사 추가")
+
+        if add_submitted:
+            if not add_name.strip():
+                st.warning("공사명을 입력해주세요.")
+            elif not add_manager.strip():
+                st.warning("담당자를 입력해주세요.")
+            elif add_total_km <= 0:
+                st.warning("전체물량(km)을 입력해주세요.")
+            elif add_plan_km <= 0:
+                st.warning("올해계획(km)을 입력해주세요.")
+            else:
+                add_construction(
+                    name=add_name.strip(),
+                    total_km=float(add_total_km),
+                    total_spot=int(add_total_spot),
+                    plan_km=float(add_plan_km),
+                    plan_spot=int(add_plan_spot),
+                    manager=add_manager.strip(),
+                    period=add_period.strip(),
+                )
+                st.success(f"'{add_name}' 공사가 추가되었습니다.")
+                st.rerun()
 
     st.divider()
 
