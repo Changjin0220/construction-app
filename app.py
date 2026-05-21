@@ -478,15 +478,20 @@ with st.sidebar:
     if "show_add_form" not in st.session_state:
         st.session_state["show_add_form"] = True
 
-    # 헤더 + 토글 버튼 나란히
-    add_h, add_btn = st.columns([3, 1])
-    with add_h:
-        st.markdown("## ➕ 공사 추가")
-    with add_btn:
-        st.markdown("<div style='margin-top:18px;'></div>", unsafe_allow_html=True)
-        toggle_label = "🔼" if st.session_state["show_add_form"] else "🔽"
-        if st.button(toggle_label, key="toggle_add", use_container_width=True):
-            st.session_state["show_add_form"] = not st.session_state["show_add_form"]
+    if st.session_state["show_add_form"]:
+        # 펼쳐진 상태: 제목 + << 버튼 나란히
+        add_h, add_btn = st.columns([3, 1])
+        with add_h:
+            st.markdown("## ➕ 공사 추가")
+        with add_btn:
+            st.markdown("<div style='margin-top:18px;'></div>", unsafe_allow_html=True)
+            if st.button("<<", key="toggle_add", use_container_width=True, help="접기"):
+                st.session_state["show_add_form"] = False
+                st.rerun()
+    else:
+        # 접힌 상태: >> 버튼만 표시
+        if st.button(">> 공사 추가", key="toggle_add", use_container_width=True, help="펼치기"):
+            st.session_state["show_add_form"] = True
             st.rerun()
 
     if st.session_state["show_add_form"]:
