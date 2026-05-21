@@ -127,6 +127,10 @@ def get_bar_color(rate: float) -> str:
     else:            return "#378ADD"
 
 
+# ── session_state 초기값 설정 (앱 최상단에서 1회) ────────────
+if "show_add_form" not in st.session_state:
+    st.session_state["show_add_form"] = True
+
 # ── 데이터 로드 ───────────────────────────────────────────────
 df = get_all_constructions()
 
@@ -475,10 +479,9 @@ with col_right:
 with st.sidebar:
 
     # ── 공사 추가 (접기/펼치기) ───────────────────────────────
-    if "show_add_form" not in st.session_state:
-        st.session_state["show_add_form"] = True
+    show_add = st.session_state["show_add_form"]
 
-    if st.session_state["show_add_form"]:
+    if show_add:
         # 펼쳐진 상태: 제목 + << 버튼 나란히
         add_h, add_btn = st.columns([3, 1])
         with add_h:
@@ -494,7 +497,7 @@ with st.sidebar:
             st.session_state["show_add_form"] = True
             st.rerun()
 
-    if st.session_state["show_add_form"]:
+    if show_add:
         with st.form("add_construction_form"):
             add_name = st.text_input("공사명")
             a1, a2 = st.columns(2)
