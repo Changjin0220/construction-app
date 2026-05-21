@@ -186,7 +186,7 @@ with col_left:
             height=max(200, len(df) * 45),
             font=dict(size=10),
         )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
     else:
         st.info("공사 데이터가 없습니다.")
 
@@ -261,7 +261,7 @@ with col_right:
             with daily_btn_cols[i % 5]:
                 is_open  = st.session_state.get(daily_key, False)
                 btn_label = f"🔼 {row['name']}" if is_open else f"📥 {row['name']}"
-                if st.button(btn_label, key=f"dbtn_{cid}", use_container_width=True):
+                if st.button(btn_label, key=f"dbtn_{cid}", width="stretch"):
                     new_state = not is_open
                     # 다른 폼 모두 닫기
                     for _, r2 in df.iterrows():
@@ -305,9 +305,9 @@ with col_right:
 
                     ds_col, dc_col = st.columns(2)
                     with ds_col:
-                        d_submitted = st.form_submit_button("💾 저장", use_container_width=True)
+                        d_submitted = st.form_submit_button("💾 저장", width="stretch")
                     with dc_col:
-                        d_cancelled = st.form_submit_button("✖ 취소", use_container_width=True)
+                        d_cancelled = st.form_submit_button("✖ 취소", width="stretch")
 
                     if d_submitted:
                         if not d_by.strip():
@@ -341,7 +341,7 @@ with col_right:
             with btn_cols[i % 5]:
                 is_open   = st.session_state.get(edit_key, False)
                 btn_label = f"🔼 {row['name']}" if is_open else f"✏️ {row['name']}"
-                if st.button(btn_label, key=f"btn_{cid}", use_container_width=True):
+                if st.button(btn_label, key=f"btn_{cid}", width="stretch"):
                     new_state = not is_open
                     for _, r2 in df.iterrows():
                         st.session_state[f"edit_{r2['id']}"]        = False
@@ -401,12 +401,12 @@ with col_right:
                     # 저장 / 취소 / 삭제 3버튼 동일 너비
                     save_col, cancel_col, del_btn_col = st.columns(3)
                     with save_col:
-                        submitted = st.form_submit_button("💾 저장", use_container_width=True)
+                        submitted = st.form_submit_button("💾 저장", width="stretch")
                     with cancel_col:
-                        cancelled = st.form_submit_button("✖ 취소", use_container_width=True)
+                        cancelled = st.form_submit_button("✖ 취소", width="stretch")
                     with del_btn_col:
                         delete_clicked = st.form_submit_button(
-                            "🗑 삭제", use_container_width=True,
+                            "🗑 삭제", width="stretch",
                             type="primary"
                         )
 
@@ -459,12 +459,12 @@ with col_right:
                     """, unsafe_allow_html=True)
                     yes_col2, no_col2, _ = st.columns([2, 2, 8])
                     with yes_col2:
-                        if st.button("✅ 삭제", key=f"yes_del2_{cid}", use_container_width=True):
+                        if st.button("✅ 삭제", key=f"yes_del2_{cid}", width="stretch"):
                             delete_construction(int(cid))
                             st.session_state[confirm_key] = False
                             st.rerun()
                     with no_col2:
-                        if st.button("✖ 취소", key=f"no_del2_{cid}", use_container_width=True):
+                        if st.button("✖ 취소", key=f"no_del2_{cid}", width="stretch"):
                             st.session_state[confirm_key] = False
                             st.rerun()
 
@@ -487,7 +487,7 @@ with st.sidebar:
     add_manager    = st.text_input("담당자", key="add_mgr")
     add_period     = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31", key="add_period")
 
-    if st.button("✅ 공사 추가", key="do_add", use_container_width=True):
+    if st.button("✅ 공사 추가", key="do_add", width="stretch"):
         if not add_name.strip():
             st.warning("공사명을 입력해주세요.")
         elif not add_manager.strip():
