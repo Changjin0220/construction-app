@@ -32,8 +32,9 @@ def get_client():
     return gspread.authorize(creds)
 
 
+@st.cache_resource(ttl=60)
 def get_sheets():
-    """construction, progress_log 두 시트 반환"""
+    """construction, progress_log 두 시트 반환 (60초 캐싱)"""
     client = get_client()
     spreadsheet = client.open_by_key(SHEET_ID)
 
@@ -92,10 +93,11 @@ def init_db():
             prog_sheet.append_row([pid, cid, done_km, done_spot, 0, 0, "초기 데이터", manager, now])
 
 
+@st.cache_data(ttl=30)
 def get_all_constructions() -> pd.DataFrame:
     """
     모든 공사 + 최신 공정률 + 이달 시공량을 계산해 DataFrame 반환.
-    sort_order 기준 오름차순.
+    sort_order 기준 오름차순. (30초 캐싱)
     """
     con_sheet, prog_sheet = get_sheets()
 
