@@ -497,7 +497,7 @@ with st.sidebar:
             st.session_state["show_add_form"] = True
             st.rerun()
 
-    if show_add:
+    if st.session_state["show_add_form"]:
         with st.form("add_construction_form"):
             add_name = st.text_input("공사명")
             a1, a2 = st.columns(2)
