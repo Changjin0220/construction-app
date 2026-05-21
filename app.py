@@ -79,13 +79,13 @@ st.markdown("""
     .summary-card {
         background: #1e2a3a;
         border-radius: 8px;
-        padding: 10px 14px;
+        padding: 8px 10px;
         text-align: center;
         color: white;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
     }
-    .summary-card .val { font-size: 24px; font-weight: 700; }
-    .summary-card .lbl { font-size: 11px; color: #8ab4d4; }
+    .summary-card .val { font-size: 20px; font-weight: 700; }
+    .summary-card .lbl { font-size: 10px; color: #8ab4d4; }
 
     .edit-form-wrap {
         background: #f0f6ff;
@@ -130,8 +130,8 @@ def get_bar_color(rate: float) -> str:
 # ── 데이터 로드 ───────────────────────────────────────────────
 df = get_all_constructions()
 
-# ── 레이아웃 ──────────────────────────────────────────────────
-col_left, col_right = st.columns([1, 3.5])
+# ── 레이아웃: 왼쪽 좁게(0.8) + 오른쪽(3.5) ──────────────────
+col_left, col_right = st.columns([0.8, 3.5])
 
 
 # ════════════════════════════════════════════════════════════
@@ -140,45 +140,51 @@ col_left, col_right = st.columns([1, 3.5])
 with col_left:
     st.markdown("### 📊 현황 요약")
 
-    c1, c2 = st.columns(2)
     avg_rate    = round(df["total_rate"].mean(), 1) if len(df) > 0 else 0.0
     total_count = len(df)
 
-    with c1:
-        st.markdown(f"""
-        <div class="summary-card">
-            <div class="val">{avg_rate}%</div>
-            <div class="lbl">평균 누적 공정률</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class="summary-card">
-            <div class="val">{total_count}</div>
-            <div class="lbl">총 공사 수</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style="font-size:11px; margin:4px 0 2px 0; color:#555;">
-        <span style="color:#EF9F27; font-size:14px;">●</span> ~30%&nbsp;&nbsp;
-        <span style="color:#1D9E75; font-size:14px;">●</span> 30~70%&nbsp;&nbsp;
-        <span style="color:#378ADD; font-size:14px;">●</span> 70%~
+    # 총 공사수 위, 평균 공정률 아래 (세로 배치)
+    st.markdown(f"""
+    <div class="summary-card">
+        <div class="val">{total_count}</div>
+        <div class="lbl">총 공사 수</div>
+    </div>
+    <div class="summary-card">
+        <div class="val">{avg_rate}%</div>
+        <div class="lbl">평균 누적 공정률</div>
     </div>
     """, unsafe_allow_html=True)
 
+    # 범례
+    st.markdown("""
+    <div style="font-size:10px; margin:4px 0 2px 0; color:#555;">
+        <span style="color:#EF9F27;">●</span> ~30%&nbsp;
+        <span style="color:#1D9E75;">●</span> 30~70%&nbsp;
+        <span style="color:#378ADD;">●</span> 70%~
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 바 차트: 공사명을 2~3줄로 표시
     if len(df) > 0:
         df_chart = df.copy()
         df_chart["color"] = df_chart["total_rate"].apply(get_bar_color)
-        fig = px.bar(df_chart, x="total_rate", y="name", orientation="h",
-                     color="color", color_discrete_map="identity", text="total_rate")
+        # 공사명 줄바꿈 처리 (공백 기준으로 최대 2줄)
+        df_chart["name_wrap"] = df_chart["name"].apply(
+            lambda n: n.replace(" ", "<br>") if len(n) > 5 else n
+        )
+        fig = px.bar(
+            df_chart, x="total_rate", y="name_wrap", orientation="h",
+            color="color", color_discrete_map="identity", text="total_rate"
+        )
         fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
         fig.update_layout(
-            xaxis=dict(range=[0, 110], title="", showgrid=True, gridcolor="#e8ecf0"),
-            yaxis=dict(title="", autorange="reversed"),
+            xaxis=dict(range=[0, 115], title="", showgrid=True, gridcolor="#e8ecf0"),
+            yaxis=dict(title="", autorange="reversed", tickfont=dict(size=10)),
             showlegend=False,
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=30, t=4, b=4), height=250, font=dict(size=11),
+            margin=dict(l=0, r=35, t=4, b=4),
+            height=max(200, len(df) * 45),
+            font=dict(size=10),
         )
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     else:
@@ -194,12 +200,8 @@ with col_right:
     if len(df) == 0:
         st.info("등록된 공사가 없습니다.")
     else:
-        # ── 테이블 전체를 하나로 구성, 삭제버튼은 테이블 밖 오른쪽 컬럼 ──
-        # 전체를 tbl_col(테이블) + del_col(삭제버튼) 2단으로 나눔
-        tbl_col, del_col = st.columns([11.5, 1])
-
-        with tbl_col:
-            # 헤더 + 전체 행을 하나의 테이블로 생성
+        # ── 테이블 (삭제 버튼 없음, 수정 폼 안에서 삭제) ────
+        with st.container():
             table_html = """
             <table class="progress-table">
               <thead>
@@ -241,50 +243,11 @@ with col_right:
             table_html += "</tbody></table>"
             st.html(table_html)
 
-        with del_col:
-            # 헤더 높이만큼 여백 후 각 행마다 버튼 배치
-            st.markdown("<div style='margin-top:52px;'></div>", unsafe_allow_html=True)
-            for _, row in df.iterrows():
-                cid         = row["id"]
-                confirm_key = f"confirm_del_{cid}"
-                if confirm_key not in st.session_state:
-                    st.session_state[confirm_key] = False
-
-                if st.button("🗑", key=f"delbtn_{cid}", use_container_width=True, help=f"{row['name']} 삭제"):
-                    for _, r2 in df.iterrows():
-                        st.session_state[f"confirm_del_{r2['id']}"] = False
-                        st.session_state[f"daily_{r2['id']}"]       = False
-                        st.session_state[f"edit_{r2['id']}"]        = False
-                    st.session_state[confirm_key] = True
-                    st.rerun()
-
-        # 삭제 확인창 (테이블 아래, 해당 공사 이름 표시)
-        for _, row in df.iterrows():
-            cid         = row["id"]
-            confirm_key = f"confirm_del_{cid}"
-            if st.session_state.get(confirm_key, False):
-                st.markdown(f"""
-                <div style="background:#fff0f0;border-left:3px solid #e74c3c;border-radius:6px;
-                            padding:8px 14px;margin:4px 0;">
-                    <strong>⚠️ '{row['name']}' 을(를) 정말 삭제할까요?</strong><br>
-                    <small style="color:#888;">삭제하면 공정률 이력까지 모두 사라지며 복구할 수 없습니다.</small>
-                </div>
-                """, unsafe_allow_html=True)
-                yes_col, no_col, _ = st.columns([2, 2, 8])
-                with yes_col:
-                    if st.button("✅ 삭제", key=f"yes_del_{cid}", use_container_width=True):
-                        delete_construction(int(cid))
-                        st.session_state[confirm_key] = False
-                        st.rerun()
-                with no_col:
-                    if st.button("✖ 취소", key=f"no_del_{cid}", use_container_width=True):
-                        st.session_state[confirm_key] = False
-                        st.rerun()
-
-        st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+        # 삭제 확인창 (수정 폼에서 삭제 버튼 클릭 시)
 
         # ════════════════════════════════════════════════════
         # 금일 작업량 입력 섹션
+        # 버튼을 다시 누르면 접히도록 토글 방식
         # ════════════════════════════════════════════════════
         st.markdown("#### 📥 금일 작업량 입력")
 
@@ -296,12 +259,17 @@ with col_right:
                 st.session_state[daily_key] = False
 
             with daily_btn_cols[i % 5]:
-                if st.button(f"📥 {row['name']}", key=f"dbtn_{cid}", use_container_width=True):
+                is_open  = st.session_state.get(daily_key, False)
+                btn_label = f"🔼 {row['name']}" if is_open else f"📥 {row['name']}"
+                if st.button(btn_label, key=f"dbtn_{cid}", use_container_width=True):
+                    new_state = not is_open
+                    # 다른 폼 모두 닫기
                     for _, r2 in df.iterrows():
-                        st.session_state[f"daily_{r2['id']}"] = False
-                        st.session_state[f"edit_{r2['id']}"]  = False
+                        st.session_state[f"daily_{r2['id']}"]       = False
+                        st.session_state[f"edit_{r2['id']}"]        = False
                         st.session_state[f"confirm_del_{r2['id']}"] = False
-                    st.session_state[daily_key] = True
+                    # 현재 버튼은 토글
+                    st.session_state[daily_key] = new_state
                     st.rerun()
 
         for _, row in df.iterrows():
@@ -357,8 +325,9 @@ with col_right:
         st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
 
         # ════════════════════════════════════════════════════
-        # 공사 정보 수정 섹션
-        # (공사명·전체물량·올해계획·담당자·공사기간 + 누적 공정률 직접 수정)
+        # 공사 정보 / 공정률 수정 섹션
+        # 버튼을 다시 누르면 접히도록 토글 방식
+        # 수정 폼 안에 삭제 버튼 포함 (저장·취소·삭제 3버튼)
         # ════════════════════════════════════════════════════
         st.markdown("#### ✏️ 공사 정보 / 공정률 수정")
 
@@ -370,17 +339,21 @@ with col_right:
                 st.session_state[edit_key] = False
 
             with btn_cols[i % 5]:
-                if st.button(f"✏️ {row['name']}", key=f"btn_{cid}", use_container_width=True):
+                is_open   = st.session_state.get(edit_key, False)
+                btn_label = f"🔼 {row['name']}" if is_open else f"✏️ {row['name']}"
+                if st.button(btn_label, key=f"btn_{cid}", use_container_width=True):
+                    new_state = not is_open
                     for _, r2 in df.iterrows():
                         st.session_state[f"edit_{r2['id']}"]        = False
                         st.session_state[f"daily_{r2['id']}"]       = False
                         st.session_state[f"confirm_del_{r2['id']}"] = False
-                    st.session_state[edit_key] = True
+                    st.session_state[edit_key] = new_state
                     st.rerun()
 
         for _, row in df.iterrows():
             cid = row["id"]
-            edit_key = f"edit_{cid}"
+            edit_key    = f"edit_{cid}"
+            confirm_key = f"confirm_del_{cid}"
 
             if st.session_state.get(edit_key, False):
                 st.markdown(f"""
@@ -393,8 +366,8 @@ with col_right:
                     st.markdown("**📌 공사 기본 정보**")
                     fi1, fi2, fi3 = st.columns(3)
                     with fi1:
-                        new_name    = st.text_input("공사명", value=row["name"])
-                        new_manager = st.text_input("담당자", value=row["manager"])
+                        new_name    = st.text_input("공사명",  value=row["name"])
+                        new_manager = st.text_input("담당자",  value=row["manager"])
                     with fi2:
                         new_total_km   = st.number_input("전체물량 (km)",   value=float(row["total_km"]),  step=0.1, min_value=0.0, format="%.1f")
                         new_total_spot = st.number_input("전체물량 (개소)", value=int(row["total_spot"]),   step=1,   min_value=0)
@@ -425,11 +398,17 @@ with col_right:
                         </div>
                         """, unsafe_allow_html=True)
 
-                    save_col, cancel_col = st.columns(2)
+                    # 저장 / 취소 / 삭제 3버튼 동일 너비
+                    save_col, cancel_col, del_btn_col = st.columns(3)
                     with save_col:
                         submitted = st.form_submit_button("💾 저장", use_container_width=True)
                     with cancel_col:
                         cancelled = st.form_submit_button("✖ 취소", use_container_width=True)
+                    with del_btn_col:
+                        delete_clicked = st.form_submit_button(
+                            "🗑 삭제", use_container_width=True,
+                            type="primary"
+                        )
 
                     if submitted:
                         if not new_name.strip():
@@ -439,7 +418,6 @@ with col_right:
                         elif not new_by.strip():
                             st.warning("수정자 이름을 입력해주세요.")
                         else:
-                            # 공사 기본 정보 수정
                             update_construction_info(
                                 construction_id=int(cid),
                                 name=new_name.strip(),
@@ -450,7 +428,6 @@ with col_right:
                                 manager=new_manager.strip(),
                                 period=new_period.strip(),
                             )
-                            # 누적 공정률 수정 (값이 변경된 경우만)
                             if float(new_km) != float(row["done_km"]) or int(new_spot) != int(row["done_spot"]):
                                 update_progress(
                                     construction_id=int(cid),
@@ -465,52 +442,93 @@ with col_right:
                         st.session_state[edit_key] = False
                         st.rerun()
 
+                    # 삭제 버튼 → 확인창으로 전환
+                    if delete_clicked:
+                        st.session_state[edit_key]    = False
+                        st.session_state[confirm_key] = True
+                        st.rerun()
+
+                # 삭제 확인창 (폼 바깥)
+                if st.session_state.get(confirm_key, False):
+                    st.markdown(f"""
+                    <div style="background:#fff0f0;border-left:3px solid #e74c3c;border-radius:6px;
+                                padding:8px 14px;margin:4px 0;">
+                        <strong>⚠️ '{row['name']}' 을(를) 정말 삭제할까요?</strong><br>
+                        <small style="color:#888;">삭제하면 공정률 이력까지 모두 사라지며 복구할 수 없습니다.</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    yes_col2, no_col2, _ = st.columns([2, 2, 8])
+                    with yes_col2:
+                        if st.button("✅ 삭제", key=f"yes_del2_{cid}", use_container_width=True):
+                            delete_construction(int(cid))
+                            st.session_state[confirm_key] = False
+                            st.rerun()
+                    with no_col2:
+                        if st.button("✖ 취소", key=f"no_del2_{cid}", use_container_width=True):
+                            st.session_state[confirm_key] = False
+                            st.rerun()
+
 
 # ════════════════════════════════════════════════════════════
 # 사이드바
 # ════════════════════════════════════════════════════════════
 with st.sidebar:
 
-    st.markdown("## ➕ 공사 추가")
+    # ── 공사 추가 (접기/펼치기) ───────────────────────────────
+    if "show_add_form" not in st.session_state:
+        st.session_state["show_add_form"] = True
 
-    with st.form("add_construction_form"):
-        add_name = st.text_input("공사명")
-        a1, a2 = st.columns(2)
-        with a1:
-            add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f")
-            add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f")
-        with a2:
-            add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1)
-            add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1)
-        add_manager = st.text_input("담당자")
-        add_period  = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31")
+    # 헤더 + 토글 버튼 나란히
+    add_h, add_btn = st.columns([3, 1])
+    with add_h:
+        st.markdown("## ➕ 공사 추가")
+    with add_btn:
+        st.markdown("<div style='margin-top:18px;'></div>", unsafe_allow_html=True)
+        toggle_label = "🔼" if st.session_state["show_add_form"] else "🔽"
+        if st.button(toggle_label, key="toggle_add", use_container_width=True):
+            st.session_state["show_add_form"] = not st.session_state["show_add_form"]
+            st.rerun()
 
-        add_submitted = st.form_submit_button("✅ 공사 추가", use_container_width=True)
+    if st.session_state["show_add_form"]:
+        with st.form("add_construction_form"):
+            add_name = st.text_input("공사명")
+            a1, a2 = st.columns(2)
+            with a1:
+                add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f")
+                add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f")
+            with a2:
+                add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1)
+                add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1)
+            add_manager = st.text_input("담당자")
+            add_period  = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31")
 
-        if add_submitted:
-            if not add_name.strip():
-                st.warning("공사명을 입력해주세요.")
-            elif not add_manager.strip():
-                st.warning("담당자를 입력해주세요.")
-            elif add_total_km <= 0:
-                st.warning("전체물량(km)을 입력해주세요.")
-            elif add_plan_km <= 0:
-                st.warning("올해계획(km)을 입력해주세요.")
-            else:
-                add_construction(
-                    name=add_name.strip(),
-                    total_km=float(add_total_km),
-                    total_spot=int(add_total_spot),
-                    plan_km=float(add_plan_km),
-                    plan_spot=int(add_plan_spot),
-                    manager=add_manager.strip(),
-                    period=add_period.strip(),
-                )
-                st.success(f"'{add_name}' 공사가 추가되었습니다.")
-                st.rerun()
+            add_submitted = st.form_submit_button("✅ 공사 추가", use_container_width=True)
+
+            if add_submitted:
+                if not add_name.strip():
+                    st.warning("공사명을 입력해주세요.")
+                elif not add_manager.strip():
+                    st.warning("담당자를 입력해주세요.")
+                elif add_total_km <= 0:
+                    st.warning("전체물량(km)을 입력해주세요.")
+                elif add_plan_km <= 0:
+                    st.warning("올해계획(km)을 입력해주세요.")
+                else:
+                    add_construction(
+                        name=add_name.strip(),
+                        total_km=float(add_total_km),
+                        total_spot=int(add_total_spot),
+                        plan_km=float(add_plan_km),
+                        plan_spot=int(add_plan_spot),
+                        manager=add_manager.strip(),
+                        period=add_period.strip(),
+                    )
+                    st.success(f"'{add_name}' 공사가 추가되었습니다.")
+                    st.rerun()
 
     st.divider()
 
+    # ── 수정 이력 조회 ────────────────────────────────────────
     st.markdown("## 🕓 수정 이력 조회")
 
     if len(df) > 0:
