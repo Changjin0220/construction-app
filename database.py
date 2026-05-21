@@ -1,85 +1,77 @@
 """
-database.py - SQLite DB 초기화 및 CRUD 함수 모음
-공정률 관리 앱의 데이터베이스 계층
+database.py - Google Sheets 기반 CRUD 함수 모음
+SQLite 대신 Google Sheets를 DB로 사용 (Streamlit Cloud 영구 저장)
 """
 
-import sqlite3
+import gspread
+from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime
+import streamlit as st
 
-DB_PATH = "construction.db"
+# Google Sheets API 스코프
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+
+# Google Sheets ID
+SHEET_ID = "1AGkk92hE3A_FNtLZvEcPa7aGTrBgUVBKk-wVALJBNcY"
+
+# 시트 이름
+SHEET_CONSTRUCTION = "construction"
+SHEET_PROGRESS     = "progress_log"
 
 
-def get_connection():
-    """DB 연결 반환"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+def get_client():
+    """Streamlit secrets에서 인증 정보를 읽어 gspread 클라이언트 반환"""
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=SCOPES,
+    )
+    return gspread.authorize(creds)
+
+
+def get_sheets():
+    """construction, progress_log 두 시트 반환"""
+    client = get_client()
+    spreadsheet = client.open_by_key(SHEET_ID)
+
+    # 시트가 없으면 자동 생성
+    existing = [ws.title for ws in spreadsheet.worksheets()]
+
+    if SHEET_CONSTRUCTION not in existing:
+        ws = spreadsheet.add_worksheet(title=SHEET_CONSTRUCTION, rows=1000, cols=20)
+        # 헤더 설정
+        ws.append_row(["id", "name", "total_km", "total_spot", "plan_km", "plan_spot",
+                        "manager", "period", "sort_order", "created_at"])
+
+    if SHEET_PROGRESS not in existing:
+        ws = spreadsheet.add_worksheet(title=SHEET_PROGRESS, rows=10000, cols=20)
+        ws.append_row(["id", "construction_id", "done_km", "done_spot",
+                        "daily_km", "daily_spot", "daily_plan", "updated_by", "updated_at"])
+
+    con_sheet  = spreadsheet.worksheet(SHEET_CONSTRUCTION)
+    prog_sheet = spreadsheet.worksheet(SHEET_PROGRESS)
+    return con_sheet, prog_sheet
+
+
+def _next_id(sheet) -> int:
+    """해당 시트의 다음 auto-increment ID 반환"""
+    records = sheet.get_all_records()
+    if not records:
+        return 1
+    return max(int(r["id"]) for r in records) + 1
 
 
 def init_db():
     """
-    DB와 테이블이 없으면 생성.
-    construction 테이블이 비어있을 경우 샘플 데이터 5개 자동 삽입.
-    기존 DB에 컬럼이 없으면 자동으로 추가 (마이그레이션).
+    시트가 없으면 생성하고, construction 시트가 비어있으면 샘플 데이터 5개 삽입.
     """
-    conn = get_connection()
-    cur = conn.cursor()
+    con_sheet, prog_sheet = get_sheets()
 
-    # 공사 목록 테이블 생성 (period 컬럼 포함)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS construction (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            total_km    REAL NOT NULL,
-            total_spot  INTEGER NOT NULL,
-            plan_km     REAL NOT NULL,
-            plan_spot   INTEGER NOT NULL,
-            manager     TEXT NOT NULL,
-            period      TEXT DEFAULT '',
-            sort_order  INTEGER DEFAULT 0,
-            created_at  TEXT NOT NULL
-        )
-    """)
-
-    # 공정률 기록 테이블 생성
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS progress_log (
-            id                INTEGER PRIMARY KEY AUTOINCREMENT,
-            construction_id   INTEGER NOT NULL,
-            done_km           REAL NOT NULL DEFAULT 0,
-            done_spot         INTEGER NOT NULL DEFAULT 0,
-            daily_km          REAL NOT NULL DEFAULT 0,
-            daily_spot        INTEGER NOT NULL DEFAULT 0,
-            daily_plan        TEXT DEFAULT '',
-            updated_by        TEXT DEFAULT '',
-            updated_at        TEXT NOT NULL,
-            FOREIGN KEY (construction_id) REFERENCES construction(id)
-        )
-    """)
-
-    # 기존 DB 마이그레이션: 없는 컬럼 추가
-    cur.execute("PRAGMA table_info(construction)")
-    con_cols = [row[1] for row in cur.fetchall()]
-    if "period" not in con_cols:
-        cur.execute("ALTER TABLE construction ADD COLUMN period TEXT DEFAULT ''")
-    if "sort_order" not in con_cols:
-        cur.execute("ALTER TABLE construction ADD COLUMN sort_order INTEGER DEFAULT 0")
-        # 기존 데이터에 sort_order 초기값 설정
-        cur.execute("UPDATE construction SET sort_order = id WHERE sort_order = 0")
-
-    cur.execute("PRAGMA table_info(progress_log)")
-    log_cols = [row[1] for row in cur.fetchall()]
-    if "daily_km" not in log_cols:
-        cur.execute("ALTER TABLE progress_log ADD COLUMN daily_km REAL NOT NULL DEFAULT 0")
-    if "daily_spot" not in log_cols:
-        cur.execute("ALTER TABLE progress_log ADD COLUMN daily_spot INTEGER NOT NULL DEFAULT 0")
-
-    conn.commit()
-
-    # 샘플 데이터: construction 테이블이 비어있을 때만 삽입
-    cur.execute("SELECT COUNT(*) FROM construction")
-    if cur.fetchone()[0] == 0:
+    records = con_sheet.get_all_records()
+    if len(records) == 0:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         sample_constructions = [
@@ -92,215 +84,206 @@ def init_db():
         sample_progress = [(4.8, 2), (2.3, 1), (9.2, 7), (5.8, 3), (5.0, 3)]
 
         for i, (name, total_km, total_spot, plan_km, plan_spot, manager, period) in enumerate(sample_constructions):
-            cur.execute("""
-                INSERT INTO construction
-                    (name, total_km, total_spot, plan_km, plan_spot, manager, period, sort_order, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (name, total_km, total_spot, plan_km, plan_spot, manager, period, i + 1, now))
-
-            construction_id = cur.lastrowid
+            cid = i + 1
+            con_sheet.append_row([cid, name, total_km, total_spot, plan_km, plan_spot,
+                                   manager, period, cid, now])
             done_km, done_spot = sample_progress[i]
-            cur.execute("""
-                INSERT INTO progress_log
-                    (construction_id, done_km, done_spot, daily_km, daily_spot, daily_plan, updated_by, updated_at)
-                VALUES (?, ?, ?, 0, 0, '초기 데이터', ?, ?)
-            """, (construction_id, done_km, done_spot, manager, now))
-
-        conn.commit()
-
-    conn.close()
+            pid = i + 1
+            prog_sheet.append_row([pid, cid, done_km, done_spot, 0, 0, "초기 데이터", manager, now])
 
 
 def get_all_constructions() -> pd.DataFrame:
     """
-    모든 공사 목록과 최신 공정률 기록을 조인하여 DataFrame으로 반환.
-    sort_order 기준 오름차순 정렬 (등록 순서 유지).
+    모든 공사 + 최신 공정률 + 이달 시공량을 계산해 DataFrame 반환.
+    sort_order 기준 오름차순.
     """
-    conn = get_connection()
+    con_sheet, prog_sheet = get_sheets()
+
+    con_records  = con_sheet.get_all_records()
+    prog_records = prog_sheet.get_all_records()
+
+    if not con_records:
+        return pd.DataFrame(columns=["id","name","total_km","total_spot","plan_km","plan_spot",
+                                      "manager","period","sort_order","done_km","done_spot",
+                                      "daily_plan","updated_by","updated_at",
+                                      "month_km","month_spot","total_rate","plan_rate"])
+
+    df_con  = pd.DataFrame(con_records)
+    df_prog = pd.DataFrame(prog_records) if prog_records else pd.DataFrame()
+
+    # 이번 달 YYYY-MM
     this_month = datetime.now().strftime("%Y-%m")
 
-    query = """
-        SELECT
-            c.id,
-            c.name,
-            c.total_km,
-            c.total_spot,
-            c.plan_km,
-            c.plan_spot,
-            c.manager,
-            c.period,
-            c.sort_order,
-            COALESCE(p.done_km, 0)     AS done_km,
-            COALESCE(p.done_spot, 0)   AS done_spot,
-            COALESCE(p.daily_plan, '')  AS daily_plan,
-            COALESCE(p.updated_by, '')  AS updated_by,
-            COALESCE(p.updated_at, c.created_at) AS updated_at,
-            COALESCE(m.month_km, 0)    AS month_km,
-            COALESCE(m.month_spot, 0)  AS month_spot
-        FROM construction c
-        LEFT JOIN (
-            SELECT * FROM progress_log
-            WHERE id IN (
-                SELECT id FROM progress_log p2
-                WHERE p2.construction_id = progress_log.construction_id
-                ORDER BY updated_at DESC LIMIT 1
-            )
-        ) p ON c.id = p.construction_id
-        LEFT JOIN (
-            SELECT construction_id,
-                   SUM(daily_km)   AS month_km,
-                   SUM(daily_spot) AS month_spot
-            FROM progress_log
-            WHERE strftime('%Y-%m', updated_at) = ?
-            GROUP BY construction_id
-        ) m ON c.id = m.construction_id
-        ORDER BY c.sort_order ASC, c.id ASC
-    """
+    results = []
+    for _, row in df_con.iterrows():
+        cid = int(row["id"])
 
-    df = pd.read_sql_query(query, conn, params=(this_month,))
-    conn.close()
+        # 해당 공사의 progress_log
+        if not df_prog.empty:
+            prog = df_prog[df_prog["construction_id"].astype(int) == cid].copy()
+        else:
+            prog = pd.DataFrame()
 
-    df["total_rate"] = df.apply(
-        lambda r: round(r["done_km"] / r["total_km"] * 100, 1) if r["total_km"] > 0 else 0.0, axis=1)
-    df["plan_rate"] = df.apply(
-        lambda r: round(r["done_km"] / r["plan_km"] * 100, 1) if r["plan_km"] > 0 else 0.0, axis=1)
+        # 최신 레코드 (누적값)
+        if not prog.empty:
+            prog_sorted = prog.sort_values("updated_at", ascending=False)
+            latest      = prog_sorted.iloc[0]
+            done_km     = float(latest["done_km"])
+            done_spot   = int(latest["done_spot"])
+            daily_plan  = str(latest["daily_plan"])
+            updated_by  = str(latest["updated_by"])
+            updated_at  = str(latest["updated_at"])
+        else:
+            done_km = done_spot = 0
+            daily_plan = updated_by = updated_at = ""
 
+        # 이달 시공량 합산
+        if not prog.empty:
+            this_month_prog = prog[prog["updated_at"].astype(str).str.startswith(this_month)]
+            month_km   = float(this_month_prog["daily_km"].astype(float).sum())
+            month_spot = int(this_month_prog["daily_spot"].astype(int).sum())
+        else:
+            month_km = month_spot = 0
+
+        total_km   = float(row["total_km"])
+        plan_km    = float(row["plan_km"])
+        total_rate = round(done_km / total_km * 100, 1) if total_km > 0 else 0.0
+        plan_rate  = round(done_km / plan_km  * 100, 1) if plan_km  > 0 else 0.0
+
+        results.append({
+            "id":         cid,
+            "name":       str(row["name"]),
+            "total_km":   total_km,
+            "total_spot": int(row["total_spot"]),
+            "plan_km":    plan_km,
+            "plan_spot":  int(row["plan_spot"]),
+            "manager":    str(row["manager"]),
+            "period":     str(row["period"]),
+            "sort_order": int(row["sort_order"]) if row["sort_order"] != "" else cid,
+            "done_km":    done_km,
+            "done_spot":  done_spot,
+            "daily_plan": daily_plan,
+            "updated_by": updated_by,
+            "updated_at": updated_at,
+            "month_km":   month_km,
+            "month_spot": month_spot,
+            "total_rate": total_rate,
+            "plan_rate":  plan_rate,
+        })
+
+    df = pd.DataFrame(results)
+    df = df.sort_values("sort_order", ascending=True).reset_index(drop=True)
     return df
 
 
-def add_construction(name: str, total_km: float, total_spot: int,
-                     plan_km: float, plan_spot: int, manager: str, period: str = ""):
-    """새 공사 추가. sort_order는 현재 최대값 + 1로 자동 설정."""
-    conn = get_connection()
-    cur = conn.cursor()
+def add_construction(name, total_km, total_spot, plan_km, plan_spot, manager, period=""):
+    """새 공사 추가"""
+    con_sheet, prog_sheet = get_sheets()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 현재 최대 sort_order 조회
-    cur.execute("SELECT COALESCE(MAX(sort_order), 0) FROM construction")
-    max_order = cur.fetchone()[0]
+    cid       = _next_id(con_sheet)
+    records   = con_sheet.get_all_records()
+    max_order = max((int(r["sort_order"]) for r in records), default=0)
 
-    cur.execute("""
-        INSERT INTO construction
-            (name, total_km, total_spot, plan_km, plan_spot, manager, period, sort_order, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (name, total_km, total_spot, plan_km, plan_spot, manager, period, max_order + 1, now))
+    con_sheet.append_row([cid, name, total_km, total_spot, plan_km, plan_spot,
+                           manager, period, max_order + 1, now])
 
-    construction_id = cur.lastrowid
-    cur.execute("""
-        INSERT INTO progress_log
-            (construction_id, done_km, done_spot, daily_km, daily_spot, daily_plan, updated_by, updated_at)
-        VALUES (?, 0, 0, 0, 0, '', ?, ?)
-    """, (construction_id, manager, now))
-
-    conn.commit()
-    conn.close()
+    pid = _next_id(prog_sheet)
+    prog_sheet.append_row([pid, cid, 0, 0, 0, 0, "", manager, now])
 
 
-def update_construction_info(construction_id: int, name: str, total_km: float, total_spot: int,
-                              plan_km: float, plan_spot: int, manager: str, period: str):
-    """
-    공사 기본 정보 수정 (공사명, 전체물량, 올해계획, 담당자, 공사기간).
-    progress_log는 건드리지 않음.
-    """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE construction
-        SET name=?, total_km=?, total_spot=?, plan_km=?, plan_spot=?, manager=?, period=?
-        WHERE id=?
-    """, (name, total_km, total_spot, plan_km, plan_spot, manager, period, construction_id))
-    conn.commit()
-    conn.close()
+def update_construction_info(construction_id, name, total_km, total_spot,
+                              plan_km, plan_spot, manager, period):
+    """공사 기본 정보 수정"""
+    con_sheet, _ = get_sheets()
+    records = con_sheet.get_all_records()
+
+    for i, r in enumerate(records):
+        if int(r["id"]) == construction_id:
+            row_num = i + 2  # 헤더 포함, 1-indexed
+            con_sheet.update(f"B{row_num}:I{row_num}",
+                             [[name, total_km, total_spot, plan_km, plan_spot, manager, period,
+                               r["sort_order"]]])
+            break
 
 
-def add_daily_work(construction_id: int, daily_km: float, daily_spot: int,
-                   daily_plan: str, updated_by: str):
-    """
-    금일 작업량 입력.
-    done_km/done_spot = 기존 누적 + 금일 작업량으로 자동 계산.
-    """
-    conn = get_connection()
-    cur = conn.cursor()
+def add_daily_work(construction_id, daily_km, daily_spot, daily_plan, updated_by):
+    """금일 작업량 입력 → 누적값 자동 계산"""
+    con_sheet, prog_sheet = get_sheets()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    cur.execute("""
-        SELECT done_km, done_spot FROM progress_log
-        WHERE construction_id = ?
-        ORDER BY updated_at DESC LIMIT 1
-    """, (construction_id,))
-    row = cur.fetchone()
-    prev_km   = row["done_km"]   if row else 0.0
-    prev_spot = row["done_spot"] if row else 0
+    # 현재 누적값 조회
+    records = prog_sheet.get_all_records()
+    prog    = [r for r in records if int(r["construction_id"]) == construction_id]
+
+    if prog:
+        prog_sorted = sorted(prog, key=lambda x: x["updated_at"], reverse=True)
+        prev_km   = float(prog_sorted[0]["done_km"])
+        prev_spot = int(prog_sorted[0]["done_spot"])
+    else:
+        prev_km = prev_spot = 0
 
     new_done_km   = prev_km   + daily_km
     new_done_spot = prev_spot + daily_spot
 
-    cur.execute("""
-        INSERT INTO progress_log
-            (construction_id, done_km, done_spot, daily_km, daily_spot, daily_plan, updated_by, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (construction_id, new_done_km, new_done_spot, daily_km, daily_spot, daily_plan, updated_by, now))
-
-    conn.commit()
-    conn.close()
+    pid = _next_id(prog_sheet)
+    prog_sheet.append_row([pid, construction_id, new_done_km, new_done_spot,
+                            daily_km, daily_spot, daily_plan, updated_by, now])
 
 
-def update_progress(construction_id: int, done_km: float, done_spot: int,
-                    updated_by: str):
-    """누적 공정률 직접 수정. daily_km/spot은 0으로 기록."""
-    conn = get_connection()
-    cur = conn.cursor()
+def update_progress(construction_id, done_km, done_spot, updated_by):
+    """누적 공정률 직접 수정"""
+    _, prog_sheet = get_sheets()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    cur.execute("""
-        INSERT INTO progress_log
-            (construction_id, done_km, done_spot, daily_km, daily_spot, daily_plan, updated_by, updated_at)
-        VALUES (?, ?, ?, 0, 0, '', ?, ?)
-    """, (construction_id, done_km, done_spot, updated_by, now))
-
-    conn.commit()
-    conn.close()
+    pid = _next_id(prog_sheet)
+    prog_sheet.append_row([pid, construction_id, done_km, done_spot,
+                            0, 0, "", updated_by, now])
 
 
-def delete_construction(construction_id: int):
-    """
-    공사 삭제 후 나머지 공사의 sort_order를 1부터 재정렬.
-    삭제된 공사 아래에 있던 공사들이 한 칸씩 당겨짐.
-    """
-    conn = get_connection()
-    cur = conn.cursor()
+def delete_construction(construction_id):
+    """공사 삭제 후 sort_order 재정렬"""
+    con_sheet, prog_sheet = get_sheets()
 
-    # 공정률 기록 먼저 삭제
-    cur.execute("DELETE FROM progress_log WHERE construction_id = ?", (construction_id,))
-    # 공사 삭제
-    cur.execute("DELETE FROM construction WHERE id = ?", (construction_id,))
+    # construction 삭제
+    con_records = con_sheet.get_all_records()
+    for i, r in enumerate(con_records):
+        if int(r["id"]) == construction_id:
+            con_sheet.delete_rows(i + 2)
+            break
 
-    # 남은 공사 sort_order 재정렬 (1, 2, 3 ... 순으로)
-    cur.execute("SELECT id FROM construction ORDER BY sort_order ASC, id ASC")
-    remaining = cur.fetchall()
-    for new_order, r in enumerate(remaining, start=1):
-        cur.execute("UPDATE construction SET sort_order = ? WHERE id = ?", (new_order, r[0]))
+    # progress_log 삭제 (해당 공사 전체, 뒤에서부터)
+    prog_records = prog_sheet.get_all_records()
+    rows_to_delete = [i + 2 for i, r in enumerate(prog_records)
+                      if int(r["construction_id"]) == construction_id]
+    for row_num in sorted(rows_to_delete, reverse=True):
+        prog_sheet.delete_rows(row_num)
 
-    conn.commit()
-    conn.close()
+    # sort_order 재정렬
+    con_records = con_sheet.get_all_records()
+    for new_order, r in enumerate(con_records, start=1):
+        row_num = con_records.index(r) + 2
+        con_sheet.update_cell(row_num, 9, new_order)  # sort_order는 9번째 컬럼
 
 
-def get_progress_history(construction_id: int) -> pd.DataFrame:
-    """특정 공사의 progress_log 전체를 최신순으로 반환."""
-    conn = get_connection()
-    query = """
-        SELECT
-            done_km    AS "누적km",
-            done_spot  AS "누적개소",
-            daily_km   AS "금일km",
-            daily_spot AS "금일개소",
-            daily_plan AS "당일계획",
-            updated_by AS "수정자",
-            updated_at AS "수정일시"
-        FROM progress_log
-        WHERE construction_id = ?
-        ORDER BY updated_at DESC
-    """
-    df = pd.read_sql_query(query, conn, params=(construction_id,))
-    conn.close()
-    return df
+def get_progress_history(construction_id) -> pd.DataFrame:
+    """특정 공사의 progress_log 전체 최신순 반환"""
+    _, prog_sheet = get_sheets()
+    records = prog_sheet.get_all_records()
+
+    prog = [r for r in records if int(r["construction_id"]) == construction_id]
+    if not prog:
+        return pd.DataFrame(columns=["누적km","누적개소","금일km","금일개소","당일계획","수정자","수정일시"])
+
+    df = pd.DataFrame(prog)
+    df = df.sort_values("updated_at", ascending=False)
+    df = df.rename(columns={
+        "done_km":    "누적km",
+        "done_spot":  "누적개소",
+        "daily_km":   "금일km",
+        "daily_spot": "금일개소",
+        "daily_plan": "당일계획",
+        "updated_by": "수정자",
+        "updated_at": "수정일시",
+    })
+    return df[["누적km","누적개소","금일km","금일개소","당일계획","수정자","수정일시"]]

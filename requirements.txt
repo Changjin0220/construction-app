@@ -1,4 +1,5 @@
 streamlit
 plotly
 pandas
-streamlit-autorefresh
+gspread
+google-auth
