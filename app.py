@@ -127,10 +127,6 @@ def get_bar_color(rate: float) -> str:
     else:            return "#378ADD"
 
 
-# ── session_state 초기값 설정 (앱 최상단에서 1회) ────────────
-if "show_add_form" not in st.session_state:
-    st.session_state["show_add_form"] = True
-
 # ── 데이터 로드 ───────────────────────────────────────────────
 df = get_all_constructions()
 
@@ -478,52 +474,40 @@ with col_right:
 # ════════════════════════════════════════════════════════════
 with st.sidebar:
 
-    # ── 공사 추가 ─────────────────────────────────────────────
-    # 접힌 상태일 때는 >> 버튼만, 펼친 상태일 때는 폼 + << 버튼
-    if not st.session_state["show_add_form"]:
-        if st.button("▶▶ 공사 추가 펼치기", key="open_add", use_container_width=True):
-            st.session_state["show_add_form"] = True
-            st.rerun()
-    else:
-        st.markdown("## ➕ 공사 추가")
-        add_name       = st.text_input("공사명", key="add_name")
-        a1, a2         = st.columns(2)
-        with a1:
-            add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_tkm")
-            add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_pkm")
-        with a2:
-            add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1, key="add_tspot")
-            add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1, key="add_pspot")
-        add_manager    = st.text_input("담당자",   key="add_mgr")
-        add_period     = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31", key="add_period")
+    # ── 공사 추가 (항상 표시) ─────────────────────────────────
+    st.markdown("## ➕ 공사 추가")
+    add_name       = st.text_input("공사명", key="add_name")
+    a1, a2         = st.columns(2)
+    with a1:
+        add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_tkm")
+        add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_pkm")
+    with a2:
+        add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1, key="add_tspot")
+        add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1, key="add_pspot")
+    add_manager    = st.text_input("담당자", key="add_mgr")
+    add_period     = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31", key="add_period")
 
-        btn1, btn2 = st.columns(2)
-        with btn1:
-            if st.button("✅ 공사 추가", key="do_add", use_container_width=True):
-                if not add_name.strip():
-                    st.warning("공사명을 입력해주세요.")
-                elif not add_manager.strip():
-                    st.warning("담당자를 입력해주세요.")
-                elif add_total_km <= 0:
-                    st.warning("전체물량(km)을 입력해주세요.")
-                elif add_plan_km <= 0:
-                    st.warning("올해계획(km)을 입력해주세요.")
-                else:
-                    add_construction(
-                        name=add_name.strip(),
-                        total_km=float(add_total_km),
-                        total_spot=int(add_total_spot),
-                        plan_km=float(add_plan_km),
-                        plan_spot=int(add_plan_spot),
-                        manager=add_manager.strip(),
-                        period=add_period.strip(),
-                    )
-                    st.success(f"'{add_name}' 공사가 추가되었습니다.")
-                    st.rerun()
-        with btn2:
-            if st.button("◀◀ 접기", key="close_add", use_container_width=True):
-                st.session_state["show_add_form"] = False
-                st.rerun()
+    if st.button("✅ 공사 추가", key="do_add", use_container_width=True):
+        if not add_name.strip():
+            st.warning("공사명을 입력해주세요.")
+        elif not add_manager.strip():
+            st.warning("담당자를 입력해주세요.")
+        elif add_total_km <= 0:
+            st.warning("전체물량(km)을 입력해주세요.")
+        elif add_plan_km <= 0:
+            st.warning("올해계획(km)을 입력해주세요.")
+        else:
+            add_construction(
+                name=add_name.strip(),
+                total_km=float(add_total_km),
+                total_spot=int(add_total_spot),
+                plan_km=float(add_plan_km),
+                plan_spot=int(add_plan_spot),
+                manager=add_manager.strip(),
+                period=add_period.strip(),
+            )
+            st.success(f"'{add_name}' 공사가 추가되었습니다.")
+            st.rerun()
 
     st.divider()
 
