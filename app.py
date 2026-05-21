@@ -478,41 +478,28 @@ with col_right:
 # ════════════════════════════════════════════════════════════
 with st.sidebar:
 
-    # ── 공사 추가 (접기/펼치기) ───────────────────────────────
-    show_add = st.session_state["show_add_form"]
-
-    if show_add:
-        # 펼쳐진 상태: 제목 + << 버튼 나란히
-        add_h, add_btn = st.columns([3, 1])
-        with add_h:
-            st.markdown("## ➕ 공사 추가")
-        with add_btn:
-            st.markdown("<div style='margin-top:18px;'></div>", unsafe_allow_html=True)
-            if st.button("<<", key="toggle_add", use_container_width=True, help="접기"):
-                st.session_state["show_add_form"] = False
-                st.rerun()
-    else:
-        # 접힌 상태: >> 버튼만 표시
-        if st.button(">> 공사 추가", key="toggle_add", use_container_width=True, help="펼치기"):
+    # ── 공사 추가 ─────────────────────────────────────────────
+    # 접힌 상태일 때는 >> 버튼만, 펼친 상태일 때는 폼 + << 버튼
+    if not st.session_state["show_add_form"]:
+        if st.button("▶▶ 공사 추가 펼치기", key="open_add", use_container_width=True):
             st.session_state["show_add_form"] = True
             st.rerun()
+    else:
+        st.markdown("## ➕ 공사 추가")
+        add_name       = st.text_input("공사명", key="add_name")
+        a1, a2         = st.columns(2)
+        with a1:
+            add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_tkm")
+            add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_pkm")
+        with a2:
+            add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1, key="add_tspot")
+            add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1, key="add_pspot")
+        add_manager    = st.text_input("담당자",   key="add_mgr")
+        add_period     = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31", key="add_period")
 
-    if st.session_state["show_add_form"]:
-        with st.form("add_construction_form"):
-            add_name = st.text_input("공사명")
-            a1, a2 = st.columns(2)
-            with a1:
-                add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f")
-                add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f")
-            with a2:
-                add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1)
-                add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1)
-            add_manager = st.text_input("담당자")
-            add_period  = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31")
-
-            add_submitted = st.form_submit_button("✅ 공사 추가", use_container_width=True)
-
-            if add_submitted:
+        btn1, btn2 = st.columns(2)
+        with btn1:
+            if st.button("✅ 공사 추가", key="do_add", use_container_width=True):
                 if not add_name.strip():
                     st.warning("공사명을 입력해주세요.")
                 elif not add_manager.strip():
@@ -533,6 +520,10 @@ with st.sidebar:
                     )
                     st.success(f"'{add_name}' 공사가 추가되었습니다.")
                     st.rerun()
+        with btn2:
+            if st.button("◀◀ 접기", key="close_add", use_container_width=True):
+                st.session_state["show_add_form"] = False
+                st.rerun()
 
     st.divider()
 
