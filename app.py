@@ -27,6 +27,9 @@ st.markdown("""
     header[data-testid="stHeader"] { display: none !important; }
     div[data-testid="stDecoration"] { display: none !important; }
     #MainMenu { display: none !important; }
+    /* 사이드바 완전 숨기기 */
+    section[data-testid="stSidebar"] { display: none !important; }
+    button[data-testid="collapsedControl"] { display: none !important; }
     .block-container { padding: 0.5rem 1rem !important; }
     table.progress-table {
         width: 100%; table-layout: fixed; border-collapse: collapse;
@@ -72,6 +75,44 @@ def get_bar_color(rate):
 
 
 df = get_all_constructions()
+
+# ════════════════════════════════════════════════════════════
+# 상단 — 공사 추가 (expander, 접으면 아래 화면이 넓어짐)
+# ════════════════════════════════════════════════════════════
+with st.expander("➕ 공사 추가", expanded=False):
+    a1, a2, a3, a4 = st.columns(4)
+    with a1:
+        add_name       = st.text_input("공사명", key="add_name")
+        add_manager    = st.text_input("담당자", key="add_mgr")
+    with a2:
+        add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_tkm")
+        add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1, key="add_tspot")
+    with a3:
+        add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f", key="add_pkm")
+        add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1, key="add_pspot")
+    with a4:
+        add_period     = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31", key="add_period")
+        st.markdown("<div style='margin-top:4px;'></div>", unsafe_allow_html=True)
+        if st.button("✅ 공사 추가", key="do_add", use_container_width=True):
+            if not add_name.strip():
+                st.warning("공사명을 입력해주세요.")
+            elif not add_manager.strip():
+                st.warning("담당자를 입력해주세요.")
+            elif add_total_km <= 0:
+                st.warning("전체물량(km)을 입력해주세요.")
+            elif add_plan_km <= 0:
+                st.warning("올해계획(km)을 입력해주세요.")
+            else:
+                add_construction(add_name.strip(), float(add_total_km), int(add_total_spot),
+                                 float(add_plan_km), int(add_plan_spot), add_manager.strip(), add_period.strip())
+                st.success(f"'{add_name}' 공사가 추가되었습니다.")
+                st.rerun()
+
+st.markdown("<div style='margin-top:4px;'></div>", unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════
+# 메인 레이아웃: 왼쪽(현황요약) + 오른쪽(공정현황)
+# ════════════════════════════════════════════════════════════
 col_left, col_right = st.columns([0.8, 3.5])
 
 
@@ -116,38 +157,37 @@ with col_right:
     if len(df) == 0:
         st.info("등록된 공사가 없습니다.")
     else:
-        tbl_col, del_col = st.columns([11.5, 1])
-        with tbl_col:
-            table_html = """
-            <table class="progress-table"><thead><tr>
-              <th style="width:11%;">공사명</th>
-              <th style="width:11%;">전체공정<br><small style="font-weight:400;color:#a0b8cc;">km/개소·기간</small></th>
-              <th style="width:10%;">올해계획공정<br><small style="font-weight:400;color:#a0b8cc;">km/개소</small></th>
-              <th style="width:10%;">이달시공<br><small style="font-weight:400;color:#a0b8cc;">km/개소</small></th>
-              <th style="width:10%;">누적시공<br><small style="font-weight:400;color:#a0b8cc;">km/개소</small></th>
-              <th style="width:13%;">누적공정률<br><small style="font-weight:400;color:#a0b8cc;">전체↑ 올해↓</small></th>
-              <th style="width:21%;">당일 작업계획</th>
-              <th style="width:10%;">담당자</th>
-            </tr></thead><tbody>"""
-            for _, row in df.iterrows():
-                b1 = get_badge_class(row["total_rate"])
-                b2 = get_badge_class(row["plan_rate"])
-                nm = row["name"].replace(" ", "<br>") if len(row["name"]) > 5 else row["name"]
-                dp = row["daily_plan"] if row["daily_plan"] else "<span style='color:#bbb;'>-</span>"
-                pd_disp = f"<br><small style='color:#888;font-size:10px;'>{row['period']}</small>" if row["period"] else ""
-                table_html += f"""<tr>
-                  <td>{nm}</td>
-                  <td>{row['total_km']:.1f} km<br>{row['total_spot']} 개소{pd_disp}</td>
-                  <td>{row['plan_km']:.1f} km<br>{row['plan_spot']} 개소</td>
-                  <td><strong>{row['month_km']:.1f}</strong> km<br>{row['month_spot']} 개소</td>
-                  <td><strong>{row['done_km']:.1f}</strong> km<br>{row['done_spot']} 개소</td>
-                  <td><span class="badge {b1}">{row['total_rate']:.1f}%</span><br>
-                      <span class="badge {b2}">올해 {row['plan_rate']:.1f}%</span></td>
-                  <td style="text-align:left;">{dp}</td>
-                  <td>{row['manager']}</td>
-                </tr>"""
-            table_html += "</tbody></table>"
-            st.html(table_html)
+        # ── 테이블 ────────────────────────────────────────────
+        table_html = """
+        <table class="progress-table"><thead><tr>
+          <th style="width:11%;">공사명</th>
+          <th style="width:11%;">전체공정<br><small style="font-weight:400;color:#a0b8cc;">km/개소·기간</small></th>
+          <th style="width:10%;">올해계획공정<br><small style="font-weight:400;color:#a0b8cc;">km/개소</small></th>
+          <th style="width:10%;">이달시공<br><small style="font-weight:400;color:#a0b8cc;">km/개소</small></th>
+          <th style="width:10%;">누적시공<br><small style="font-weight:400;color:#a0b8cc;">km/개소</small></th>
+          <th style="width:13%;">누적공정률<br><small style="font-weight:400;color:#a0b8cc;">전체↑ 올해↓</small></th>
+          <th style="width:21%;">당일 작업계획</th>
+          <th style="width:10%;">담당자</th>
+        </tr></thead><tbody>"""
+        for _, row in df.iterrows():
+            b1 = get_badge_class(row["total_rate"])
+            b2 = get_badge_class(row["plan_rate"])
+            nm = row["name"].replace(" ", "<br>") if len(row["name"]) > 5 else row["name"]
+            dp = row["daily_plan"] if row["daily_plan"] else "<span style='color:#bbb;'>-</span>"
+            pd_disp = f"<br><small style='color:#888;font-size:10px;'>{row['period']}</small>" if row["period"] else ""
+            table_html += f"""<tr>
+              <td>{nm}</td>
+              <td>{row['total_km']:.1f} km<br>{row['total_spot']} 개소{pd_disp}</td>
+              <td>{row['plan_km']:.1f} km<br>{row['plan_spot']} 개소</td>
+              <td><strong>{row['month_km']:.1f}</strong> km<br>{row['month_spot']} 개소</td>
+              <td><strong>{row['done_km']:.1f}</strong> km<br>{row['done_spot']} 개소</td>
+              <td><span class="badge {b1}">{row['total_rate']:.1f}%</span><br>
+                  <span class="badge {b2}">올해 {row['plan_rate']:.1f}%</span></td>
+              <td style="text-align:left;">{dp}</td>
+              <td>{row['manager']}</td>
+            </tr>"""
+        table_html += "</tbody></table>"
+        st.html(table_html)
 
         # 삭제 확인창
         for _, row in df.iterrows():
@@ -203,10 +243,10 @@ with col_right:
                     fd1, fd2, fd3 = st.columns(3)
                     with fd1:
                         d_km   = st.number_input("금일 시공 (km)",  value=0.0, step=0.1, min_value=0.0, format="%.2f")
-                        d_spot = st.number_input("금일 시공 (개소)", value=0,   step=1,   min_value=0)
+                        d_spot = st.number_input("금일 시공 (개소)", value=0, step=1, min_value=0)
                     with fd2:
                         d_plan = st.text_input("당일 작업계획", value="")
-                        d_by   = st.text_input("입력자 이름",  value="")
+                        d_by   = st.text_input("입력자 이름", value="")
                     with fd3:
                         st.markdown(f"""<div style="font-size:11px;color:#555;padding-top:4px;">
                             <b>현재 누적</b><br>{float(row['done_km']):.1f} km / {int(row['done_spot'])} 개소<br><br>
@@ -331,90 +371,38 @@ with col_right:
                             st.session_state[ck] = False
                             st.rerun()
 
+        st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════════
-# 사이드바
-# ════════════════════════════════════════════════════════════
-with st.sidebar:
-
-    # ── 공사 추가 토글 버튼 (항상 최상단에 고정) ──────────────
-    # show_add_form 키가 없으면 무조건 True(열린 상태)로 초기화
-    if "show_add_form" not in st.session_state:
-        st.session_state.show_add_form = True
-
-    # 토글 버튼: 항상 보임 (접혀있어도 이 버튼은 절대 사라지지 않음)
-    if st.session_state.show_add_form:
-        if st.button("🔼 공사 추가 접기", key="toggle_sidebar", use_container_width=True):
-            st.session_state.show_add_form = False
-            st.rerun()
-    else:
-        if st.button("🔽 공사 추가 펼치기", key="toggle_sidebar", use_container_width=True):
-            st.session_state.show_add_form = True
-            st.rerun()
-
-    # ── 공사 추가 폼 (토글 상태에 따라 표시) ─────────────────
-    if st.session_state.show_add_form:
-        st.markdown("## ➕ 공사 추가")
-        with st.form(key="add_construction_form", clear_on_submit=True):
-            add_name       = st.text_input("공사명")
-            a1, a2         = st.columns(2)
-            with a1:
-                add_total_km   = st.number_input("전체물량 (km)",   min_value=0.0, step=0.1, format="%.1f")
-                add_plan_km    = st.number_input("올해계획 (km)",   min_value=0.0, step=0.1, format="%.1f")
-            with a2:
-                add_total_spot = st.number_input("전체물량 (개소)", min_value=0, step=1)
-                add_plan_spot  = st.number_input("올해계획 (개소)", min_value=0, step=1)
-            add_manager = st.text_input("담당자")
-            add_period  = st.text_input("공사기간 (예: 26.5.16~27.12.31)", placeholder="26.5.16~27.12.31")
-            add_sub = st.form_submit_button("✅ 공사 추가")
-            if add_sub:
-                if not add_name.strip():
-                    st.warning("공사명을 입력해주세요.")
-                elif not add_manager.strip():
-                    st.warning("담당자를 입력해주세요.")
-                elif add_total_km <= 0:
-                    st.warning("전체물량(km)을 입력해주세요.")
-                elif add_plan_km <= 0:
-                    st.warning("올해계획(km)을 입력해주세요.")
-                else:
-                    add_construction(add_name.strip(), float(add_total_km), int(add_total_spot),
-                                     float(add_plan_km), int(add_plan_spot), add_manager.strip(), add_period.strip())
-                    st.success(f"'{add_name}' 공사가 추가되었습니다.")
-                    st.rerun()
-
-    st.divider()
-
-    st.markdown("## 🕓 수정 이력 조회")
-    if len(df) > 0:
-        construction_options = {row["name"]: row["id"] for _, row in df.iterrows()}
-        selected_name = st.selectbox("공사 선택", options=list(construction_options.keys()), key="history_select")
-        if selected_name:
-            history_df = get_progress_history(construction_options[selected_name])
-            if len(history_df) == 0:
-                st.info("수정 이력이 없습니다.")
-            else:
-                st.markdown(f"**{selected_name}** 이력 ({len(history_df)}건)")
-                hist_html = """<table style="width:100%;border-collapse:collapse;font-size:10px;">
-                <thead><tr>
-                  <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">누적km</th>
-                  <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">누적개소</th>
-                  <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">금일km</th>
-                  <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">금일개소</th>
-                  <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">당일계획</th>
-                  <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">수정자</th>
-                  <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">수정일시</th>
-                </tr></thead><tbody>"""
-                for _, hrow in history_df.iterrows():
-                    hist_html += f"""<tr>
-                      <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['누적km']:.1f}</td>
-                      <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['누적개소']}</td>
-                      <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['금일km']:.1f}</td>
-                      <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['금일개소']}</td>
-                      <td style="padding:4px;border:1px solid #ddd;">{hrow['당일계획'] or '-'}</td>
-                      <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['수정자'] or '-'}</td>
-                      <td style="padding:4px;border:1px solid #ddd;font-size:10px;">{hrow['수정일시']}</td>
-                    </tr>"""
-                hist_html += "</tbody></table>"
-                st.html(hist_html)
-    else:
-        st.info("등록된 공사가 없습니다.")
+        # ── 수정 이력 조회 ────────────────────────────────────
+        with st.expander("🕓 수정 이력 조회"):
+            if len(df) > 0:
+                construction_options = {row["name"]: row["id"] for _, row in df.iterrows()}
+                selected_name = st.selectbox("공사 선택", options=list(construction_options.keys()), key="history_select")
+                if selected_name:
+                    history_df = get_progress_history(construction_options[selected_name])
+                    if len(history_df) == 0:
+                        st.info("수정 이력이 없습니다.")
+                    else:
+                        st.markdown(f"**{selected_name}** 이력 ({len(history_df)}건)")
+                        hist_html = """<table style="width:100%;border-collapse:collapse;font-size:10px;">
+                        <thead><tr>
+                          <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">누적km</th>
+                          <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">누적개소</th>
+                          <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">금일km</th>
+                          <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">금일개소</th>
+                          <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">당일계획</th>
+                          <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">수정자</th>
+                          <th style="background:#1e2a3a;color:#c8d8ea;padding:4px;border:1px solid #2e3d50;">수정일시</th>
+                        </tr></thead><tbody>"""
+                        for _, hrow in history_df.iterrows():
+                            hist_html += f"""<tr>
+                              <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['누적km']:.1f}</td>
+                              <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['누적개소']}</td>
+                              <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['금일km']:.1f}</td>
+                              <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['금일개소']}</td>
+                              <td style="padding:4px;border:1px solid #ddd;">{hrow['당일계획'] or '-'}</td>
+                              <td style="padding:4px;border:1px solid #ddd;text-align:center;">{hrow['수정자'] or '-'}</td>
+                              <td style="padding:4px;border:1px solid #ddd;font-size:10px;">{hrow['수정일시']}</td>
+                            </tr>"""
+                        hist_html += "</tbody></table>"
+                        st.html(hist_html)
