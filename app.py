@@ -104,7 +104,8 @@ st.markdown("""
         margin-bottom: 6px;
     }
 
-    section[data-testid="stSidebar"] .block-container { padding: 0.5rem !important; }
+    section[data-testid="stSidebar"] { padding: 0.5rem !important; }
+    section[data-testid="stSidebar"] > div { padding-top: 0.5rem !important; }
 
     div[data-testid="column"] .stButton button {
         font-size: 11px;
